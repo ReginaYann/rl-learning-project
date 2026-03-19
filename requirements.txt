@@ -1,0 +1,24 @@
+# RL Learning Project - Dependencies
+# ============================================
+# 推荐 Python 版本: 3.10 或 3.11
+# 你的环境: CUDA 12.2 / RTX 4090
+# PyTorch 需单独安装 CUDA 版，见下方说明
+# ============================================
+
+# 经典 RL 环境与工具
+gymnasium>=0.29.0,<0.32.0
+numpy>=1.24.0,<2.0.0
+matplotlib>=3.7.0
+
+# 深度学习框架 (见 install.sh 或下方说明)
+# torch 需用 pip 的 --index-url 安装 CUDA 版，勿直接 pip install -r requirements.txt
+# torch>=2.0.0,<2.6.0
+
+# LLM 相关 (DPO/PPO 微调)
+transformers>=4.45.0,<4.50.0
+datasets>=2.14.0,<3.0.0
+accelerate>=0.33.0,<0.35.0
+trl>=0.11.0,<0.15.0
+
+# 实验管理
+tqdm>=4.65.0
