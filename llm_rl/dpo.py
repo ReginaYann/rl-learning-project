@@ -34,15 +34,20 @@ def get_batch_log_probs(
         prompt_len = len(tokenizer.encode(prompt, add_special_tokens=True))
         need_grad = model.training  # 策略模型需梯度，参考模型不需
         with torch.no_grad() if not need_grad else torch.enable_grad():
+            # 对 prompt+response 整条序列前向，得到每个位置「预测下一 token」的 logits
             outputs = model(**inputs)
             logits = outputs.logits
+            # 因果 LM：位置 t 的 logits 预测的是 token t+1，故 logits[:-1] 与 input_ids[1:] 对齐
             shift_logits = logits[..., :-1, :].contiguous().view(-1, logits.size(-1))
             shift_labels = inputs["input_ids"][..., 1:].contiguous().view(-1)
             loss_fct = nn.CrossEntropyLoss(reduction="none")
+            # CE = -log P(真实下一 token | 上文)，取负得到每个位置上的 log P
             token_log_probs = -loss_fct(shift_logits, shift_labels)
-            # 只取 response 部分 (从 prompt_len 开始)
+            # DPO 只要「在 x 条件下生成 y」的 log π：去掉 prompt 段，只保留 response 对应位置
+            # （切片边界依赖 prompt_len 与拼接 token 化一致，可能有轻微近似）
             response_token_log_probs = token_log_probs.view(1, -1)[0, prompt_len - 1 : -1]
             if response_token_log_probs.numel() > 0:
+                # 对 response 各 token 的 log prob 取平均，作为 log π(y|x) 的标量估计（也可用 sum）
                 log_prob = response_token_log_probs.mean()
             else:
                 log_prob = torch.tensor(0.0, device=device)

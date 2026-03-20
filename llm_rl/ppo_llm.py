@@ -71,7 +71,11 @@ class PPOTrainerLLM:
         attention_mask: torch.Tensor,
         response_mask: torch.Tensor,
     ) -> torch.Tensor:
-        """计算 response 部分的 log π(y|x)，即生成序列的对数概率"""
+        """计算 response 部分的 log π(y|x)，即生成序列的对数概率。
+
+        与 generate() 分离：这里对固定的 full_ids 做一次标准前向（teacher forcing），
+        得到对真实 token 的 log prob，对策略参数可导，供 PPO 的 loss.backward()。
+        """
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         logits = outputs.logits[:, :-1]
         labels = input_ids[:, 1:]
@@ -90,7 +94,11 @@ class PPOTrainerLLM:
         do_sample: bool = True,
         temperature: float = 0.7,
     ) -> Tuple[List[str], torch.Tensor, torch.Tensor]:
-        """生成 response，返回文本、log_probs、ref_log_probs"""
+        """生成 response，返回文本、policy/ref 的 log_probs。
+
+        两阶段：① generate 采样得到序列；② get_log_probs 再前向一次算 log π(y|x)。
+        ① 只负责探索与离散选择；② 才给出可反传的 log prob（generate 内部不便直接用于策略梯度）。
+        """
         inputs = self.tokenizer(
             prompts,
             return_tensors="pt",
@@ -100,7 +108,7 @@ class PPOTrainerLLM:
         ).to(self.device)
         prompt_lengths = inputs["attention_mask"].sum(dim=1)
 
-        # 策略模型生成
+        # ① 自回归采样，得到 full_ids（与下面算 log prob 的前向是两次不同目的）
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
@@ -113,7 +121,7 @@ class PPOTrainerLLM:
             response_ids = out[prompt_lengths[i] :]
             responses.append(self.tokenizer.decode(response_ids, skip_special_tokens=True))
 
-        # 计算 log probs (简化: 用 teacher forcing)
+        # ② 对已定下的 full_ids 再 forward：teacher forcing 聚合 response 段 log π，可反传
         full_ids = outputs
         full_attention = (full_ids != self.tokenizer.pad_token_id).long()
         if full_attention.sum() == 0:
