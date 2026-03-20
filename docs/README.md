@@ -19,3 +19,9 @@
 |------|------|------|------|
 | [DPO](DPO.md) | 直接偏好优化 | `llm_rl/dpo.py` | preference_data.jsonl |
 | [PPO-LLM](PPO-LLM.md) | PPO 用于语言模型 | `llm_rl/ppo_llm.py` | preference_data.jsonl |
+
+## 面试复习
+
+| 文档 | 说明 |
+|------|------|
+| [面试考点-RL与大模型对齐](面试考点-RL与大模型对齐.md) | 大模型算法岗常见 RL / RLHF / DPO 问答 |
