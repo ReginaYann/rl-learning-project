@@ -19,10 +19,10 @@ class RewardModel:
         self.tokenizer = tokenizer
 
     def __call__(self, prompts: List[str], responses: List[str]) -> torch.Tensor:
-        """返回每个 (prompt, response) 的奖励，范围 [0,1]"""
+        """返回每个 (prompt, response) 的奖励，范围 [0,1]。实际应用可替换为训练好的 RM"""
         scores = []
         for prompt, response in zip(prompts, responses):
-            # 简单规则: 长度适中、包含完整句子给高分
+            # 演示用规则: 长度适中、包含句号给高分
             length = len(response)
             has_period = "." in response or "。" in response
             score = 0.3 * min(length / 50, 1.0) + 0.7 * float(has_period)
@@ -41,7 +41,7 @@ class PPOTrainerLLM:
         model_name: str = "distilgpt2",
         ref_model_name: Optional[str] = None,
         lr: float = 1e-5,
-        clip_eps: float = 0.2,
+        clip_eps: float = 0.2,   # PPO clip 范围
         gamma: float = 0.99,
         device: str = "cpu",
     ):
@@ -54,6 +54,7 @@ class PPOTrainerLLM:
         self.model = AutoModelForCausalLM.from_pretrained(model_name)
         self.model.to(self.device)
 
+        # 参考模型冻结，用于 KL 约束，防止策略偏离过远
         self.ref_model = AutoModelForCausalLM.from_pretrained(ref_model_name or model_name)
         self.ref_model.to(self.device)
         self.ref_model.eval()
@@ -70,7 +71,7 @@ class PPOTrainerLLM:
         attention_mask: torch.Tensor,
         response_mask: torch.Tensor,
     ) -> torch.Tensor:
-        """计算 response 部分的 log pi(a|s)"""
+        """计算 response 部分的 log π(y|x)，即生成序列的对数概率"""
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         logits = outputs.logits[:, :-1]
         labels = input_ids[:, 1:]
@@ -78,7 +79,7 @@ class PPOTrainerLLM:
         token_log_probs = torch.gather(
             log_probs, 2, labels.unsqueeze(-1)
         ).squeeze(-1)
-        # mask 掉 prompt 部分
+        # 只对 response 部分（非 prompt）求 log prob
         response_token_log_probs = token_log_probs * response_mask[:, 1:]
         return (response_token_log_probs.sum(-1) / (response_mask[:, 1:].sum(-1) + 1e-8))
 
@@ -137,9 +138,9 @@ class PPOTrainerLLM:
         ref_log_probs: torch.Tensor,
         rewards: torch.Tensor,
     ) -> torch.Tensor:
-        """PPO clip 损失"""
+        """PPO clip 损失: ratio = π/π_ref，限制更新幅度"""
         ratio = torch.exp(policy_log_probs - ref_log_probs)
-        advantages = rewards - rewards.mean()
+        advantages = rewards - rewards.mean()  # 简化版优势，实际可用 GAE
         pg_loss1 = ratio * advantages
         pg_loss2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * advantages
         loss = -torch.min(pg_loss1, pg_loss2).mean()

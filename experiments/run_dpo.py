@@ -76,8 +76,8 @@ def evaluate(trainer: DPOTrainer, data_path: str, n_samples: int = 3):
 
 
 if __name__ == "__main__":
-    config = dict(n_epochs=3, model_name="distilgpt2", beta=0.1, lr=5e-5)
+    from configs.default import DPO_CONFIG
     print("=== DPO 训练 ===")
-    trainer = train(config)
+    trainer = train(DPO_CONFIG)
     data_path = Path(__file__).parent.parent / "data" / "preference_data.jsonl"
     evaluate(trainer, str(data_path))

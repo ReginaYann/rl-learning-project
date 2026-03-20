@@ -32,7 +32,7 @@ def get_batch_log_probs(
             max_length=512,
         ).to(device)
         prompt_len = len(tokenizer.encode(prompt, add_special_tokens=True))
-        need_grad = model.training
+        need_grad = model.training  # 策略模型需梯度，参考模型不需
         with torch.no_grad() if not need_grad else torch.enable_grad():
             outputs = model(**inputs)
             logits = outputs.logits
@@ -60,7 +60,7 @@ class DPOTrainer:
         self,
         model_name: str = "distilgpt2",
         ref_model_name: Optional[str] = None,
-        beta: float = 0.1,
+        beta: float = 0.1,  # 控制偏离参考策略的程度，越大越保守
         lr: float = 5e-5,
         device: str = "cpu",
     ):
@@ -72,6 +72,7 @@ class DPOTrainer:
         self.model = AutoModelForCausalLM.from_pretrained(model_name)
         self.model.to(self.device)
 
+        # 参考模型（通常为 SFT 模型）冻结，用于计算 log ratio
         self.ref_model = AutoModelForCausalLM.from_pretrained(ref_model_name or model_name)
         self.ref_model.to(self.device)
         self.ref_model.eval()
@@ -101,10 +102,10 @@ class DPOTrainer:
             self.ref_model, self.tokenizer, prompts, rejected, self.device
         )
 
-        # log_ratio = log pi/pi_ref
+        # log_ratio = log π/π_ref。希望 chosen 的 ratio 高、rejected 的 ratio 低
         chosen_log_ratios = policy_chosen_logps - ref_chosen_logps
         rejected_log_ratios = policy_rejected_logps - ref_rejected_logps
-        # DPO 目标: chosen 的 ratio 应大于 rejected
+        # DPO 损失: -log σ(β * (chosen_ratio - rejected_ratio))，等价于偏好分类
         logits = self.beta * (chosen_log_ratios - rejected_log_ratios)
         loss = -F.logsigmoid(logits).mean()
         return loss

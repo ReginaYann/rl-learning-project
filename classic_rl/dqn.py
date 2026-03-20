@@ -34,10 +34,10 @@ class DQNAgent:
         n_actions: int,
         lr: float = 1e-3,
         gamma: float = 0.99,
-        epsilon: float = 1.0,
+        epsilon: float = 1.0,      # 探索率: 1=完全随机，0=纯贪心。同 Q-Learning，初期从 1 开始
         epsilon_decay: float = 0.995,
         epsilon_min: float = 0.01,
-        target_update_freq: int = 100,
+        target_update_freq: int = 100,  # 每 N 步将 policy_net 复制到 target_net，稳定训练
         device: str = "cpu",
     ):
         self.n_actions = n_actions
@@ -49,12 +49,14 @@ class DQNAgent:
         self.device = torch.device(device)
         self.update_count = 0
 
+        # 双网络: policy_net 用于选动作和更新，target_net 用于计算目标，减少目标值抖动
         self.policy_net = DQN(state_dim, n_actions).to(self.device)
         self.target_net = DQN(state_dim, n_actions).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=lr)
 
     def select_action(self, state: np.ndarray, training: bool = True) -> int:
+        # ε-greedy，同 Q-Learning
         if training and np.random.random() < self.epsilon:
             return np.random.randint(self.n_actions)
         with torch.no_grad():
@@ -72,10 +74,10 @@ class DQNAgent:
     ) -> float:
         # 当前 Q 值
         q_values = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
-        # 目标 Q 值: r + gamma * max_a' Q_target(s', a')
+        # 目标 Q 值: r + gamma * max_a' Q_target(s', a')。用 target_net 而非 policy_net，减少目标抖动
         with torch.no_grad():
             next_q = self.target_net(next_states).max(1)[0]
-            targets = rewards + self.gamma * next_q * (1 - dones)
+            targets = rewards + self.gamma * next_q * (1 - dones)  # done 时无后续回报
         loss = F.mse_loss(q_values, targets)
         self.optimizer.zero_grad()
         loss.backward()
@@ -83,8 +85,9 @@ class DQNAgent:
 
         self.update_count += 1
         if self.update_count % self.target_update_freq == 0:
-            self.target_net.load_state_dict(self.policy_net.state_dict())
+            self.target_net.load_state_dict(self.policy_net.state_dict())  # 定期同步目标网络
         return loss.item()
 
     def decay_epsilon(self):
+        # 同 Q-Learning，逐渐从探索转向利用
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)

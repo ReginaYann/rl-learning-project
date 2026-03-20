@@ -12,6 +12,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from classic_rl.ppo import PPOAgent
+from configs.default import PPO_AGENT_KEYS
 from utils.logger import Logger
 
 
@@ -21,8 +22,7 @@ def train(config: dict):
     n_actions = env.action_space.n
 
     agent = PPOAgent(state_dim, n_actions, **{
-        k: v for k, v in config.items()
-        if k in ["lr", "gamma", "gae_lambda", "clip_eps", "n_epochs", "batch_size"]
+        k: v for k, v in config.items() if k in PPO_AGENT_KEYS
     })
     logger = Logger("logs/ppo")
 

@@ -11,7 +11,7 @@ from torch.distributions import Categorical
 
 
 class ActorCritic(nn.Module):
-    """Actor: 策略网络; Critic: 价值网络"""
+    """Actor: 策略网络 π(a|s); Critic: 价值网络 V(s)。共享特征提取"""
 
     def __init__(self, state_dim: int, n_actions: int, hidden_dim: int = 128):
         super().__init__()
@@ -49,9 +49,9 @@ class PPOAgent:
         n_actions: int,
         lr: float = 3e-4,
         gamma: float = 0.99,
-        gae_lambda: float = 0.95,
-        clip_eps: float = 0.2,
-        n_epochs: int = 4,
+        gae_lambda: float = 0.95,   # GAE 的 λ，权衡偏差与方差
+        clip_eps: float = 0.2,      # PPO clip 范围，限制策略更新幅度
+        n_epochs: int = 4,          # 每批数据重复训练轮数
         batch_size: int = 64,
         device: str = "cpu",
     ):
@@ -79,7 +79,7 @@ class PPOAgent:
         next_value: float,
         next_done: bool,
     ) -> tuple:
-        """计算广义优势估计 GAE"""
+        """计算广义优势估计 GAE: A_t = δ_t + (γλ)δ_{t+1} + ...，其中 δ_t = r_t + γV(s_{t+1}) - V(s_t)"""
         advantages = []
         lastgaelam = 0
         for t in reversed(range(len(rewards))):
@@ -92,7 +92,7 @@ class PPOAgent:
             delta = rewards[t] + self.gamma * nextvalues * nextnonterminal - values[t]
             lastgaelam = delta + self.gamma * self.gae_lambda * nextnonterminal * lastgaelam
             advantages.insert(0, lastgaelam)
-        returns = [a + v for a, v in zip(advantages, values)]
+        returns = [a + v for a, v in zip(advantages, values)]  # return = advantage + value
         return advantages, returns
 
     def update(
@@ -105,7 +105,7 @@ class PPOAgent:
     ) -> dict:
         indices = np.arange(len(states))
         total_loss = 0
-        for _ in range(self.n_epochs):
+        for _ in range(self.n_epochs):  # 每批数据重复训练，提高样本利用率
             np.random.shuffle(indices)
             for start in range(0, len(indices), self.batch_size):
                 end = start + self.batch_size
@@ -118,12 +118,12 @@ class PPOAgent:
                 mb_returns = torch.FloatTensor(returns[mb_indices]).to(self.device)
 
                 _, log_prob, entropy, value = self.model.get_action_and_value(mb_states, mb_actions)
-                ratio = torch.exp(log_prob - mb_log_probs_old)
+                ratio = torch.exp(log_prob - mb_log_probs_old)  # π(a|s) / π_old(a|s)
                 pg_loss1 = ratio * mb_advantages
                 pg_loss2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * mb_advantages
-                pg_loss = -torch.min(pg_loss1, pg_loss2).mean()
+                pg_loss = -torch.min(pg_loss1, pg_loss2).mean()  # PPO clip
                 vf_loss = F.mse_loss(value, mb_returns)
-                loss = pg_loss + 0.5 * vf_loss - 0.01 * entropy.mean()
+                loss = pg_loss + 0.5 * vf_loss - 0.01 * entropy.mean()  # 熵项鼓励探索
 
                 self.optimizer.zero_grad()
                 loss.backward()

@@ -67,7 +67,7 @@ def evaluate(trainer: PPOTrainerLLM, n_samples: int = 3):
 
 
 if __name__ == "__main__":
-    config = dict(n_epochs=3, model_name="distilgpt2", lr=1e-5)
+    from configs.default import PPO_LLM_CONFIG
     print("=== PPO-LLM 训练 ===")
-    trainer = train(config)
+    trainer = train(PPO_LLM_CONFIG)
     evaluate(trainer)

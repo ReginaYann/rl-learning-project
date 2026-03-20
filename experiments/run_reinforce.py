@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import gymnasium as gym
 import numpy as np
 from classic_rl.reinforce import REINFORCEAgent
+from configs.default import REINFORCE_AGENT_KEYS
 from utils.logger import Logger
 
 
@@ -20,7 +21,7 @@ def train(config: dict):
     n_actions = env.action_space.n
 
     agent = REINFORCEAgent(state_dim, n_actions, **{
-        k: v for k, v in config.items() if k in ["lr", "gamma"]
+        k: v for k, v in config.items() if k in REINFORCE_AGENT_KEYS
     })
     logger = Logger("logs/reinforce")
 

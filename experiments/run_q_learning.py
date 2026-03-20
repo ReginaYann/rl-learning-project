@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import gymnasium as gym
 from classic_rl.q_learning import QLearningAgent
+from configs.default import QL_AGENT_KEYS
 from utils.logger import Logger
 
 
@@ -18,7 +19,7 @@ def train(config: dict):
     agent = QLearningAgent(
         n_states=env.observation_space.n,
         n_actions=env.action_space.n,
-        **{k: v for k, v in config.items() if k != "n_episodes" and k != "max_steps"},
+        **{k: v for k, v in config.items() if k in QL_AGENT_KEYS},
     )
     logger = Logger("logs/q_learning")
 
@@ -51,8 +52,8 @@ def evaluate(agent: QLearningAgent, n_episodes: int = 100):
         for _ in range(100):
             action = agent.select_action(state, training=False)
             state, reward, terminated, truncated, _ = env.step(action)
-            if terminated:
-                wins += int(reward > 0)
+            if terminated or truncated:
+                wins += int(reward > 0) if terminated else 0
                 break
     print(f"验证: {n_episodes} 局中成功 {wins} 局 ({100*wins/n_episodes:.1f}%)")
 

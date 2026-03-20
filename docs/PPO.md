@@ -7,7 +7,7 @@ PPO 由 OpenAI 在 2017 年提出，是一种**策略梯度**算法，通过 **c
 ## 核心思想
 
 - **Actor-Critic**：同时学习策略（Actor）和价值函数（Critic）
-- **Clip 目标**：限制新旧策略比率 \(r_t = \pi(a|s) / \pi_{old}(a|s)\) 在 \([1-\epsilon, 1+\epsilon]\)，避免更新过大
+- **Clip 目标**：限制新旧策略比率 $r_t = \pi(a|s) / \pi_{old}(a|s)$ 在 $[1-\epsilon, 1+\epsilon]$，避免更新过大
 - **GAE**：用广义优势估计降低优势估计的方差
 
 ## 公式
@@ -24,10 +24,10 @@ $$
 L^{CLIP}(\theta) = \mathbb{E}_t \left[ \min \left( r_t(\theta) \hat{A}_t,\; \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t \right) \right]
 $$
 
-- \(\hat{A}_t\)：优势估计（如 GAE）
-- \(\epsilon\)：clip 范围，常用 0.2
+- $\hat{A}_t$：优势估计（如 GAE）
+- $\epsilon$：clip 范围，常用 0.2
 
-直观理解：当 \(\hat{A}_t > 0\) 时，限制 \(r_t\) 不要过大；当 \(\hat{A}_t < 0\) 时，限制 \(r_t\) 不要过小。
+直观理解：当 $\hat{A}_t > 0$ 时，限制 $r_t$ 不要过大；当 $\hat{A}_t < 0$ 时，限制 $r_t$ 不要过小。
 
 ### 3. 总损失
 
@@ -35,8 +35,8 @@ $$
 L = L^{CLIP} - c_1 L^{VF} + c_2 H[\pi]
 $$
 
-- \(L^{VF}\)：价值函数 MSE 损失
-- \(H[\pi]\)：策略熵，鼓励探索
+- $L^{VF}$：价值函数 MSE 损失
+- $H[\pi]$：策略熵，鼓励探索
 
 ### 4. 广义优势估计 (GAE)
 
@@ -49,12 +49,12 @@ $$
 \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
 $$
 
-\(\lambda \in [0,1]\) 控制偏差-方差权衡，常用 0.95。
+$\lambda \in [0,1]$ 控制偏差-方差权衡，常用 0.95。
 
 ## 算法流程
 
-1. 用当前策略收集一批轨迹，记录 \(s, a, r, \log \pi(a|s), V(s)\)
-2. 用 GAE 计算优势 \(\hat{A}_t\) 和回报目标
+1. 用当前策略收集一批轨迹，记录 $s, a, r, \log \pi(a|s), V(s)$
+2. 用 GAE 计算优势 $\hat{A}_t$ 和回报目标
 3. 对同一批数据做多轮（如 4 轮）mini-batch 更新
 4. 每轮随机打乱，按 mini-batch 计算 clip 损失 + 价值损失 + 熵项，更新参数
 

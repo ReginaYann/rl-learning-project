@@ -12,6 +12,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from classic_rl.dqn import DQNAgent
+from configs.default import DQN_AGENT_KEYS
 from utils.logger import Logger
 from utils.replay_buffer import ReplayBuffer
 
@@ -22,8 +23,7 @@ def train(config: dict):
     n_actions = env.action_space.n
 
     agent = DQNAgent(state_dim, n_actions, **{
-        k: v for k, v in config.items()
-        if k in ["lr", "gamma", "epsilon", "epsilon_decay", "epsilon_min", "target_update"]
+        k: v for k, v in config.items() if k in DQN_AGENT_KEYS
     })
     buffer = ReplayBuffer(config["buffer_size"])
     logger = Logger("logs/dqn")
@@ -31,6 +31,7 @@ def train(config: dict):
     for ep in range(config["n_episodes"]):
         state, _ = env.reset()
         total_reward = 0
+        ep_loss = None
         for step in range(config["max_steps"]):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -45,16 +46,25 @@ def train(config: dict):
                 next_states = torch.FloatTensor(np.array([b[3] for b in batch]))
                 dones = torch.FloatTensor([b[4] for b in batch])
                 loss = agent.update(states, actions, rewards, next_states, dones)
+                ep_loss = loss
                 agent.decay_epsilon()
 
             state = next_state
             if terminated or truncated:
                 break
 
-        logger.log(ep, reward=total_reward, epsilon=agent.epsilon)
+        log_data = {"reward": total_reward, "epsilon": agent.epsilon}
+        if ep_loss is not None:
+            log_data["loss"] = ep_loss
+        logger.log(ep, **log_data)
         if (ep + 1) % 50 == 0:
-            avg = sum(h["reward"] for h in logger.history[-50:]) / 50
-            print(f"Episode {ep+1}, Avg Reward (last 50): {avg:.1f}")
+            recent = logger.history[-50:]
+            avg_reward = sum(h["reward"] for h in recent) / 50
+            losses = [h["loss"] for h in recent if "loss" in h]
+            msg = f"Episode {ep+1}, Avg Reward (last 50): {avg_reward:.1f}"
+            if losses:
+                msg += f", Avg Loss: {sum(losses)/len(losses):.4f}"
+            print(msg)
 
     logger.save("dqn.json")
     return agent
